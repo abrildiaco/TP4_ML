@@ -16,11 +16,11 @@ CLASS_NAMES = {
     9: "Ankle boot"
 }
 
-def plot_images(X, y=None, n_images = 15, indices = None, random_state = 42, image_shape = (28, 28),
-                class_names = CLASS_NAMES, n_cols = 5, cmap = "gray", title = None):
+def plot_images(X, y=None, n_images=15, indices=None, random_state=42, image_shape=(28, 28),
+                class_names=CLASS_NAMES, n_cols=5, cmap="gray", title=None, compare_with=None, comparison_labels=("Original", "Reconstruccion"), clip_compare=True):
     """
     Plots an arbitrary number of images from a dataset of flattened images.
-    If indices are not provided, it selects random images without replacement.
+    If compare_with is provided, it compares the original images with one or more reconstructed versions.
 
     Arguments:
         X (pd.DataFrame | np.ndarray): flattened image data
@@ -33,6 +33,9 @@ def plot_images(X, y=None, n_images = 15, indices = None, random_state = 42, ima
         n_cols (int): number of columns in the figure
         cmap (str): matplotlib colormap
         title (str | None): general title for the full figure
+        compare_with (pd.DataFrame | np.ndarray | list | dict | None): reconstructed images to compare against X
+        comparison_labels (tuple | list): row labels used when compare_with is provided
+        clip_compare (bool): whether to clip reconstructed images to the range [0, 1]
 
     Returns:
         None
@@ -47,7 +50,6 @@ def plot_images(X, y=None, n_images = 15, indices = None, random_state = 42, ima
     # If no specific indices are provided, randomly selects n_images observations.
     if indices is None:
         rng = np.random.default_rng(random_state)
-
         n_images = min(n_images, len(X_values))
         indices = rng.choice(len(X_values), size=n_images, replace=False)
 
@@ -55,38 +57,109 @@ def plot_images(X, y=None, n_images = 15, indices = None, random_state = 42, ima
         indices = np.asarray(indices)
         n_images = len(indices)
 
-    n_rows = math.ceil(n_images / n_cols)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize = (2.2 * n_cols, 2.4 * n_rows + 1))
+    # Keeps the original behavior when no comparison images are provided.
+    if compare_with is None:
+        n_rows = math.ceil(n_images / n_cols)
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(2.2 * n_cols, 2.4 * n_rows + 1))
 
-    if title is not None:
-        fig.suptitle(title, fontsize = 14, fontweight = "bold")
+        if title is not None:
+            fig.suptitle(title, fontsize=14, fontweight="bold")
 
-    # Flattens axes so it can be iterated as a one-dimensional list.
-    axes = np.array(axes).reshape(-1)
+        axes = np.array(axes).reshape(-1)
 
-    # Plots each selected image in one subplot.
-    for ax, idx in zip(axes, indices):
-        # Converts the flattened 784-pixel vector back into a 28x28 image.
-        image = X_values[idx].reshape(image_shape)
+        for ax, idx in zip(axes, indices):
+            image = X_values[idx].reshape(image_shape)
 
-        ax.imshow(image, cmap=cmap)
-        ax.axis("off")
+            ax.imshow(image, cmap=cmap)
+            ax.axis("off")
 
-        if y is not None:
-            label = y_values[idx]
+            if y is not None:
+                label = y_values[idx]
+                label_name = class_names.get(label, label) if class_names is not None else label
+                ax.set_title(f"{label}: {label_name}", fontsize=9)
 
-            label_name = class_names.get(label, label) if class_names is not None else label
+        for ax in axes[n_images:]:
+            ax.axis("off")
 
-            ax.set_title(f"{label}: {label_name}", fontsize = 9)
+        if title is not None:
+            plt.tight_layout(rect=(0, 0, 1, 0.95))
+        else:
+            plt.tight_layout()
 
-    # Turns off empty subplots when the grid has more spaces than images.
-    for ax in axes[n_images:]:
-        ax.axis("off")
+        plt.show()
+        return
 
-    if title is not None:
-        plt.tight_layout(rect = (0, 0, 1, 0.95))
+    # Builds the list of datasets and row labels to compare.
+    plot_data = [X_values]
+    row_labels = [comparison_labels[0]]
+
+    if isinstance(compare_with, dict):
+        for label, data in compare_with.items():
+            data_values = data.to_numpy() if hasattr(data, "to_numpy") else np.asarray(data)
+            plot_data.append(data_values)
+            row_labels.append(label)
+
+    elif isinstance(compare_with, (list, tuple)) and not isinstance(compare_with, np.ndarray):
+        for i, data in enumerate(compare_with):
+            data_values = data.to_numpy() if hasattr(data, "to_numpy") else np.asarray(data)
+            label = comparison_labels[i + 1] if i + 1 < len(comparison_labels) else f"Comparación {i + 1}"
+            plot_data.append(data_values)
+            row_labels.append(label)
+
     else:
-        plt.tight_layout()
+        data_values = compare_with.to_numpy() if hasattr(compare_with, "to_numpy") else np.asarray(compare_with)
+        label = comparison_labels[1] if len(comparison_labels) > 1 else "Comparación"
+        plot_data.append(data_values)
+        row_labels.append(label)
+
+    n_comparison_rows = len(plot_data)
+    n_grid_rows = math.ceil(n_images / n_cols)
+
+    fig, axes = plt.subplots(n_comparison_rows * n_grid_rows, n_cols, figsize=(2.2 * n_cols, 2.15 * n_comparison_rows * n_grid_rows + 1))
+
+    if title is not None:
+        fig.suptitle(title, fontsize=14, fontweight="bold")
+
+    axes = np.asarray(axes).reshape(n_comparison_rows * n_grid_rows, n_cols)
+
+    for plot_position, idx in enumerate(indices):
+        grid_row = plot_position // n_cols
+        grid_col = plot_position % n_cols
+
+        for comparison_row in range(n_comparison_rows):
+            ax = axes[grid_row * n_comparison_rows + comparison_row, grid_col]
+
+            image = plot_data[comparison_row][idx].reshape(image_shape)
+
+            # Reconstructions can slightly exceed the valid pixel range.
+            if comparison_row > 0 and clip_compare:
+                image = np.clip(image, 0, 1)
+
+            ax.imshow(image, cmap=cmap)
+            ax.axis("off")
+
+            # Adds class labels only over the original images.
+            if comparison_row == 0 and y is not None:
+                label = y_values[idx]
+                label_name = class_names.get(label, label) if class_names is not None else label
+                ax.set_title(f"{label}: {label_name}", fontsize=9)
+
+            # Adds row labels only at the left of each block.
+            if grid_col == 0:
+                ax.text(-0.25, 0.5, row_labels[comparison_row], fontsize=10, fontweight="bold", ha="right", va="center", transform=ax.transAxes)
+
+    # Turns off empty subplots in the last block.
+    for empty_position in range(n_images, n_grid_rows * n_cols):
+        grid_row = empty_position // n_cols
+        grid_col = empty_position % n_cols
+
+        for comparison_row in range(n_comparison_rows):
+            axes[grid_row * n_comparison_rows + comparison_row, grid_col].axis("off")
+
+    if title is not None:
+        fig.subplots_adjust(left=0.08, right=0.99, top=0.92, bottom=0.03, wspace=0.08, hspace=0.15)
+    else:
+        fig.subplots_adjust(left=0.08, right=0.99, top=0.98, bottom=0.03, wspace=0.08, hspace=0.15)
 
     plt.show()
 
@@ -274,3 +347,370 @@ def plot_mean_image_by_class(X, y, classes=None, image_shape=(28, 28), class_nam
     fig.subplots_adjust(left=0.02, right=0.98, top=0.86, bottom=0.08, wspace=0.18, hspace=0.38)
 
     plt.show()
+
+
+def plot_cumulative_variance(pca_params, variance_threshold = 0.95, title = "Varianza explicada acumulada vs Componentes"):
+    """
+    Plots the cumulative explained variance as a function of the number of principal components.
+    It also marks the selected variance threshold and the number of components needed to reach it.
+
+    Arguments:
+        pca_params (dict): fitted PCA parameters returned by fit_pca
+        variance_threshold (float): cumulative explained variance threshold
+        title (str): title for the figure
+
+    Returns:
+        None
+    """
+    # Gets the cumulative explained variance from the fitted PCA parameters.
+    cumulative_variance = pca_params["cumulative_variance_ratio"]
+
+    # Finds the first component that reaches the selected variance threshold.
+    m_components = np.searchsorted(cumulative_variance, variance_threshold) + 1
+
+    plt.figure(figsize=(8, 4))
+
+    # Plots cumulative variance against the number of components.
+    plt.plot(np.arange(1, len(cumulative_variance) + 1), cumulative_variance, linewidth=2)
+
+    # Marks the variance threshold and the selected number of components.
+    plt.axhline(variance_threshold, color="red", linestyle="--", label=f"{int(variance_threshold * 100)}% de varianza")
+    plt.axvline(m_components, color="gray", linestyle="--", label=f"{m_components} componentes")
+
+    plt.title(title, fontsize=14)
+    plt.xlabel("Número de componentes")
+    plt.ylabel("Varianza explicada acumulada")
+    plt.ylim(0, 1.02)
+    plt.grid(alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_k_means_inertia_analysis(kmeans_pca_results, kmeans_ae_results, title="Análisis de inercia de k-Means"):
+    """
+    Plots raw and normalized k-means inertia for PCA and AE latent representations in a single figure.
+
+    Arguments:
+        kmeans_pca_results (dict): k-means results over PCA latent data indexed by K
+        kmeans_ae_results (dict): k-means results over AE latent data indexed by K
+        title (str): general title for the figure
+
+    Returns:
+        None
+    """
+    k_values = sorted(kmeans_pca_results.keys())
+
+    # Extract inertia values ordered by K
+    pca_inertia = np.array([kmeans_pca_results[k]["inertia"] for k in k_values])
+    ae_inertia = np.array([kmeans_ae_results[k]["inertia"] for k in k_values])
+
+    # Normalize each curve by its first value
+    pca_inertia_norm = pca_inertia / pca_inertia[0]
+    ae_inertia_norm = ae_inertia / ae_inertia[0]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+    fig.suptitle(title, fontsize=15, fontweight="bold")
+
+    # Raw inertia
+    axes[0].plot(k_values, pca_inertia, marker="o", label="PCA")
+    axes[0].plot(k_values, ae_inertia, marker="o", label="AE")
+    axes[0].set_title("Inercia según K", fontweight="bold")
+    axes[0].set_xlabel("K")
+    axes[0].set_ylabel("Inertia")
+    axes[0].set_xticks(k_values)
+    axes[0].grid(alpha=0.3)
+    axes[0].legend()
+
+    # Normalized inertia
+    axes[1].plot(k_values, pca_inertia_norm, marker="o", label="PCA")
+    axes[1].plot(k_values, ae_inertia_norm, marker="o", label="AE")
+    axes[1].set_title("Inercia normalizada según K", fontweight="bold")
+    axes[1].set_xlabel("K")
+    axes[1].set_ylabel("Normalized inertia")
+    axes[1].set_xticks(k_values)
+    axes[1].grid(alpha=0.3)
+    axes[1].legend()
+
+    plt.tight_layout(rect=(0, 0, 1, 0.92))
+    plt.show()
+
+
+def plot_gmm_log_likelihood_comparison(pca_results, ae_results, title="Log-likelihood de GMM según K"):
+    """
+    Plots GMM log-likelihood for PCA and AE latent representations.
+
+    Arguments:
+        pca_results (dict): GMM results over PCA latent data indexed by k
+        ae_results (dict): GMM results over AE latent data indexed by k
+        title (str): title for the figure
+
+    Returns:
+        None
+    """
+    k_values = sorted(pca_results.keys())
+
+    # Extracts log-likelihood values ordered by k
+    pca_log_likelihood = [pca_results[k]["log_likelihood"] for k in k_values]
+    ae_log_likelihood = [ae_results[k]["log_likelihood"] for k in k_values]
+
+    plt.figure(figsize=(8, 4))
+
+    plt.plot(k_values, pca_log_likelihood, marker="o", label="PCA")
+    plt.plot(k_values, ae_log_likelihood, marker="o", label="AE")
+
+    plt.title(title, fontsize=14, fontweight="bold")
+    plt.xlabel("K")
+    plt.ylabel("Log-likelihood")
+    plt.xticks(k_values)
+    plt.grid(alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_clustering_k_analysis(kmeans_pca_gain, kmeans_ae_gain, gmm_pca_gain, gmm_ae_gain, kmeans_pca_silhouette, kmeans_ae_silhouette, gmm_pca_silhouette, gmm_ae_silhouette, title="Análisis de K para clustering"):
+    """
+    Plots marginal gain and Silhouette score curves for k-Means and GMM in a single figure.
+
+    Arguments:
+        kmeans_pca_gain (pd.DataFrame): marginal gain table for k-Means with PCA
+        kmeans_ae_gain (pd.DataFrame): marginal gain table for k-Means with AE
+        gmm_pca_gain (pd.DataFrame): marginal gain table for GMM with PCA
+        gmm_ae_gain (pd.DataFrame): marginal gain table for GMM with AE
+        kmeans_pca_silhouette (pd.DataFrame): Silhouette score table for k-Means with PCA
+        kmeans_ae_silhouette (pd.DataFrame): Silhouette score table for k-Means with AE
+        gmm_pca_silhouette (pd.DataFrame): Silhouette score table for GMM with PCA
+        gmm_ae_silhouette (pd.DataFrame): Silhouette score table for GMM with AE
+        title (str): general title for the figure
+
+    Returns:
+        None
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8))
+
+    fig.suptitle(title, fontsize=15, fontweight="bold")
+
+    # k-Means marginal gain
+    axes[0, 0].plot(kmeans_pca_gain["K"], kmeans_pca_gain["marginal_gain"], marker="o", label="PCA")
+    axes[0, 0].plot(kmeans_ae_gain["K"], kmeans_ae_gain["marginal_gain"], marker="o", label="AE")
+    axes[0, 0].set_title("Ganancia marginal de k-Means (Inercia)", fontweight="bold")
+    axes[0, 0].set_xlabel("K")
+    axes[0, 0].set_ylabel("Marginal gain")
+    axes[0, 0].grid(alpha=0.3)
+    axes[0, 0].legend()
+
+    # GMM marginal gain
+    axes[0, 1].plot(gmm_pca_gain["K"], gmm_pca_gain["marginal_gain"], marker="o", label="PCA")
+    axes[0, 1].plot(gmm_ae_gain["K"], gmm_ae_gain["marginal_gain"], marker="o", label="AE")
+    axes[0, 1].set_title("Ganancia marginal de GMM (Log-Likelihood)", fontweight="bold")
+    axes[0, 1].set_xlabel("K")
+    axes[0, 1].set_ylabel("Marginal gain")
+    axes[0, 1].grid(alpha=0.3)
+    axes[0, 1].legend()
+
+    # k-Means Silhouette score
+    axes[1, 0].plot(kmeans_pca_silhouette["K"], kmeans_pca_silhouette["silhouette_score"], marker="o", label="PCA", color = "red")
+    axes[1, 0].plot(kmeans_ae_silhouette["K"], kmeans_ae_silhouette["silhouette_score"], marker="o", label="AE", color = "green")
+    axes[1, 0].set_title("Silhouette score de k-Means", fontweight="bold")
+    axes[1, 0].set_xlabel("K")
+    axes[1, 0].set_ylabel("Silhouette score")
+    axes[1, 0].grid(alpha=0.3)
+    axes[1, 0].legend()
+
+    # GMM Silhouette score
+    axes[1, 1].plot(gmm_pca_silhouette["K"], gmm_pca_silhouette["silhouette_score"], marker="o", label="PCA", color = "red")
+    axes[1, 1].plot(gmm_ae_silhouette["K"], gmm_ae_silhouette["silhouette_score"], marker="o", label="AE", color = "green")
+    axes[1, 1].set_title("Silhouette score de GMM", fontweight="bold")
+    axes[1, 1].set_xlabel("K")
+    axes[1, 1].set_ylabel("Silhouette score")
+    axes[1, 1].grid(alpha=0.3)
+    axes[1, 1].legend()
+
+    for ax in axes.ravel():
+        ax.set_xticks(sorted(kmeans_pca_silhouette["K"].unique()))
+
+    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    plt.show()
+
+
+def plot_tsne_cluster_comparison(Y, labels_1, labels_2, title_1="k-Means", title_2="GMM", general_title="t-SNE sobre PCA latente"):
+    """
+    Plots the same 2D t-SNE embedding colored by two different clustering assignments.
+
+    Arguments:
+        Y (np.ndarray): 2D t-SNE coordinates
+        labels_1 (np.ndarray): first clustering labels
+        labels_2 (np.ndarray): second clustering labels
+        title_1 (str): title for the first subplot
+        title_2 (str): title for the second subplot
+        general_title (str): general title for the figure
+
+    Returns:
+        None
+    """
+    labels_1 = np.asarray(labels_1)
+    labels_2 = np.asarray(labels_2)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+
+    fig.suptitle(general_title, fontsize=15, fontweight="bold")
+
+    scatter_1 = axes[0].scatter(Y[:, 0], Y[:, 1], c=labels_1, cmap="tab10", s=12, alpha=0.75)
+    axes[0].set_title(title_1, fontweight="bold")
+    axes[0].set_xlabel("t-SNE 1")
+    axes[0].set_ylabel("t-SNE 2")
+    axes[0].grid(alpha=0.2)
+    cbar_1 = fig.colorbar(scatter_1, ax=axes[0])
+    cbar_1.set_label("Cluster")
+
+    scatter_2 = axes[1].scatter(Y[:, 0], Y[:, 1], c=labels_2, cmap="tab10", s=12, alpha=0.75)
+    axes[1].set_title(title_2, fontweight="bold")
+    axes[1].set_xlabel("t-SNE 1")
+    axes[1].set_ylabel("t-SNE 2")
+    axes[1].grid(alpha=0.2)
+    cbar_2 = fig.colorbar(scatter_2, ax=axes[1])
+    cbar_2.set_label("Cluster")
+
+    plt.tight_layout(rect=(0, 0, 1, 0.92))
+    plt.show()
+
+
+def plot_cluster_size_comparison(kmeans_size_table, gmm_size_table, title="Tamaño de clusters"):
+    """
+    Plots cluster sizes for k-Means and GMM side by side.
+
+    Arguments:
+        kmeans_size_table (pd.DataFrame): cluster size table for k-Means
+        gmm_size_table (pd.DataFrame): cluster size table for GMM
+        title (str): general title for the figure
+
+    Returns:
+        None
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    fig.suptitle(title, fontsize=15, fontweight="bold")
+
+    tables = [kmeans_size_table, gmm_size_table]
+    titles = ["k-Means", "GMM"]
+
+    for ax, table, subtitle in zip(axes, tables, titles):
+        bars = ax.bar(table["cluster"], table["count"])
+
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, height, int(height), ha="center", va="bottom", fontsize=9)
+
+        ax.set_title(subtitle, fontweight="bold")
+        ax.set_xlabel("Cluster")
+        ax.set_ylabel("Number of samples")
+        ax.set_xticks(table["cluster"])
+        ax.grid(axis="y", alpha=0.3)
+
+    plt.tight_layout(rect=(0, 0, 1, 0.92))
+    plt.show()
+
+
+def plot_cluster_class_heatmap_comparison(kmeans_class_table, gmm_class_table, title="Composición de clases por cluster"):
+    """
+    Plots class composition heatmaps for k-Means and GMM side by side.
+
+    Arguments:
+        kmeans_class_table (pd.DataFrame): cluster-class count table for k-Means
+        gmm_class_table (pd.DataFrame): cluster-class count table for GMM
+        title (str): general title for the figure
+
+    Returns:
+        None
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+
+    fig.suptitle(title, fontsize=15, fontweight="bold")
+
+    tables = [kmeans_class_table, gmm_class_table]
+    subtitles = ["k-Means", "GMM"]
+
+    vmax = max(kmeans_class_table.values.max(), gmm_class_table.values.max())
+
+    for ax, table, subtitle in zip(axes, tables, subtitles):
+        image = ax.imshow(table.values, aspect="auto", cmap="Blues", vmin=0, vmax=vmax)
+
+        ax.set_title(subtitle, fontweight="bold")
+        ax.set_xlabel("True class")
+        ax.set_ylabel("Cluster")
+        ax.set_xticks(np.arange(table.shape[1]))
+        ax.set_xticklabels(table.columns, rotation=45, ha="right")
+        ax.set_yticks(np.arange(table.shape[0]))
+        ax.set_yticklabels(table.index)
+
+    cbar = fig.colorbar(image, ax=axes.ravel().tolist())
+    cbar.set_label("Count")
+
+    plt.tight_layout(rect=(0, 0, 1, 0.92))
+    plt.show()
+
+
+def plot_cluster_purity_comparison(kmeans_purity_table, gmm_purity_table, title="Pureza de clusters"):
+    """
+    Plots cluster purity for k-Means and GMM side by side.
+
+    Arguments:
+        kmeans_purity_table (pd.DataFrame): cluster purity table for k-Means
+        gmm_purity_table (pd.DataFrame): cluster purity table for GMM
+        title (str): general title for the figure
+
+    Returns:
+        None
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    fig.suptitle(title, fontsize=15, fontweight="bold")
+
+    tables = [kmeans_purity_table, gmm_purity_table]
+    subtitles = ["k-Means", "GMM"]
+
+    for ax, table, subtitle in zip(axes, tables, subtitles):
+        bars = ax.bar(table["cluster"], table["purity"])
+
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, height, round(height, 2), ha="center", va="bottom", fontsize=9)
+
+        ax.set_title(subtitle, fontweight="bold")
+        ax.set_xlabel("Cluster")
+        ax.set_ylabel("Purity")
+        ax.set_ylim(0, 1)
+        ax.set_xticks(table["cluster"])
+        ax.grid(axis="y", alpha=0.3)
+
+    plt.tight_layout(rect=(0, 0, 1, 0.92))
+    plt.show()
+
+
+def plot_images_by_cluster(X_images, cluster_labels, y_true=None, cluster_id=0, n_images=10, random_state=42, title=None):
+    """
+    Plots random original images assigned to one selected cluster.
+
+    Arguments:
+        X_images (pd.DataFrame | np.ndarray): original image data
+        cluster_labels (np.ndarray): cluster labels
+        y_true (pd.Series | np.ndarray | None): true labels
+        cluster_id (int): cluster to visualize
+        n_images (int): number of images to plot
+        random_state (int): random seed for reproducibility
+        title (str | None): title for the figure
+
+    Returns:
+        None
+    """
+    labels = np.asarray(cluster_labels)
+
+    # Gets indices assigned to the selected cluster
+    cluster_indices = np.where(labels == cluster_id)[0]
+
+    if title is None:
+        title = f"Muestras del cluster {cluster_id}"
+
+    # Reuses the general image plotting function
+    plot_images(X_images, y_true, n_images=n_images, indices=cluster_indices[:n_images], random_state=random_state, title=title)

@@ -73,3 +73,58 @@ def stratified_train_eval_split(X, y, eval_size = 0.20, random_state = 42):
     y_eval = y.iloc[eval_indices]
 
     return (X_train, y_train), (X_eval, y_eval)
+
+
+def stratified_sample_selection(X, y, n_samples, random_state=42):
+    """
+    Selects a stratified sample from a dataset.
+    The function keeps the class proportions as balanced as possible.
+
+    Arguments:
+        X (pd.DataFrame | np.ndarray): features
+        y (pd.Series | np.ndarray): labels
+        n_samples (int): total number of observations to sample
+        random_state (int): random seed for reproducibility
+
+    Returns:
+        tuple[pd.DataFrame | np.ndarray, pd.Series | np.ndarray, np.ndarray]: sampled features, sampled labels and selected indices
+    """
+    rng = np.random.default_rng(random_state)
+
+    # Convert y to NumPy
+    y_values = y.to_numpy() if hasattr(y, "to_numpy") else np.asarray(y)
+
+    classes = np.unique(y_values)
+
+    # Compute the base number of samples per class
+    n_per_class = n_samples // len(classes)
+
+    remainder = n_samples % len(classes)
+
+    indices = []
+
+    for i, class_value in enumerate(classes):
+        # Find the row positions that belong to the current class
+        class_indices = np.where(y_values == class_value)[0]
+
+        # Shuffle the indices so the selection is random inside each class
+        rng.shuffle(class_indices)
+
+        # Give one extra sample to the first classes when there is a remainder
+        class_sample_size = n_per_class + 1 if i < remainder else n_per_class
+
+        # Select the required number of indices for the current class
+        selected_class_indices = class_indices[:class_sample_size]
+
+        indices.extend(selected_class_indices)
+
+    indices = np.array(indices)
+
+    # Shuffle the final indices so classes are not grouped together
+    rng.shuffle(indices)
+
+    X_sample = X.iloc[indices] if hasattr(X, "iloc") else X[indices]
+    y_sample = y.iloc[indices] if hasattr(y, "iloc") else y[indices]
+
+    return X_sample, y_sample, indices
+
