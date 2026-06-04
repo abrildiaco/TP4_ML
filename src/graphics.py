@@ -577,34 +577,19 @@ def plot_tsne_cluster_comparison(Y, labels_1, labels_2, title_1="k-Means", title
 
 
 def plot_cluster_size_comparison(kmeans_size_table, gmm_size_table, title="Tamaño de clusters"):
-    """
-    Plots cluster sizes for k-Means and GMM side by side.
-
-    Arguments:
-        kmeans_size_table (pd.DataFrame): cluster size table for k-Means
-        gmm_size_table (pd.DataFrame): cluster size table for GMM
-        title (str): general title for the figure
-
-    Returns:
-        None
-    """
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
     fig.suptitle(title, fontsize=15, fontweight="bold")
 
-    tables = [kmeans_size_table, gmm_size_table]
-    titles = ["k-Means", "GMM"]
-
-    for ax, table, subtitle in zip(axes, tables, titles):
-        bars = ax.bar(table["cluster"], table["count"])
+    for ax, table, subtitle in zip(axes, [kmeans_size_table, gmm_size_table], ["k-Means", "GMM"]):
+        bars = ax.bar(table["cluster"], table["count"], color="#2C7FB8")
 
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, height, int(height), ha="center", va="bottom", fontsize=9)
+            ax.text(bar.get_x() + bar.get_width() / 2, height + 8, f"{int(height)}", ha="center", va="bottom", fontsize=9)
 
         ax.set_title(subtitle, fontweight="bold")
         ax.set_xlabel("Cluster")
-        ax.set_ylabel("Number of samples")
+        ax.set_ylabel("Cantidad de muestras")
         ax.set_xticks(table["cluster"])
         ax.grid(axis="y", alpha=0.3)
 
@@ -613,74 +598,51 @@ def plot_cluster_size_comparison(kmeans_size_table, gmm_size_table, title="Tama�
 
 
 def plot_cluster_class_heatmap_comparison(kmeans_class_table, gmm_class_table, title="Composición de clases por cluster"):
-    """
-    Plots class composition heatmaps for k-Means and GMM side by side.
-
-    Arguments:
-        kmeans_class_table (pd.DataFrame): cluster-class count table for k-Means
-        gmm_class_table (pd.DataFrame): cluster-class count table for GMM
-        title (str): general title for the figure
-
-    Returns:
-        None
-    """
-    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
-
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5.8), constrained_layout=True)
     fig.suptitle(title, fontsize=15, fontweight="bold")
 
+    vmax = max(kmeans_class_table.values.max(), gmm_class_table.values.max())
     tables = [kmeans_class_table, gmm_class_table]
     subtitles = ["k-Means", "GMM"]
-
-    vmax = max(kmeans_class_table.values.max(), gmm_class_table.values.max())
 
     for ax, table, subtitle in zip(axes, tables, subtitles):
         image = ax.imshow(table.values, aspect="auto", cmap="Blues", vmin=0, vmax=vmax)
 
         ax.set_title(subtitle, fontweight="bold")
-        ax.set_xlabel("True class")
+        ax.set_xlabel("Clase real")
         ax.set_ylabel("Cluster")
         ax.set_xticks(np.arange(table.shape[1]))
-        ax.set_xticklabels(table.columns, rotation=45, ha="right")
+        ax.set_xticklabels(table.columns, rotation=45, ha="right", fontsize=9)
         ax.set_yticks(np.arange(table.shape[0]))
         ax.set_yticklabels(table.index)
 
-    cbar = fig.colorbar(image, ax=axes.ravel().tolist())
-    cbar.set_label("Count")
+        for i in range(table.shape[0]):
+            for j in range(table.shape[1]):
+                value = table.values[i, j]
+                if value > 0:
+                    ax.text(j, i, int(value), ha="center", va="center", fontsize=8, color="black")
 
-    plt.tight_layout(rect=(0, 0, 1, 0.92))
+    cbar = fig.colorbar(image, ax=axes, shrink=0.85, pad=0.02)
+    cbar.set_label("Cantidad")
+
     plt.show()
 
 
 def plot_cluster_purity_comparison(kmeans_purity_table, gmm_purity_table, title="Pureza de clusters"):
-    """
-    Plots cluster purity for k-Means and GMM side by side.
-
-    Arguments:
-        kmeans_purity_table (pd.DataFrame): cluster purity table for k-Means
-        gmm_purity_table (pd.DataFrame): cluster purity table for GMM
-        title (str): general title for the figure
-
-    Returns:
-        None
-    """
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
     fig.suptitle(title, fontsize=15, fontweight="bold")
 
-    tables = [kmeans_purity_table, gmm_purity_table]
-    subtitles = ["k-Means", "GMM"]
-
-    for ax, table, subtitle in zip(axes, tables, subtitles):
-        bars = ax.bar(table["cluster"], table["purity"])
+    for ax, table, subtitle in zip(axes, [kmeans_purity_table, gmm_purity_table], ["k-Means", "GMM"]):
+        bars = ax.bar(table["cluster"], table["purity"], color="#2C7FB8")
 
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, height, round(height, 2), ha="center", va="bottom", fontsize=9)
+            ax.text(bar.get_x() + bar.get_width() / 2, height + 0.015, f"{height:.2f}", ha="center", va="bottom", fontsize=9)
 
         ax.set_title(subtitle, fontweight="bold")
         ax.set_xlabel("Cluster")
-        ax.set_ylabel("Purity")
-        ax.set_ylim(0, 1)
+        ax.set_ylabel("Pureza")
+        ax.set_ylim(0, 1.08)
         ax.set_xticks(table["cluster"])
         ax.grid(axis="y", alpha=0.3)
 
@@ -706,11 +668,20 @@ def plot_images_by_cluster(X_images, cluster_labels, y_true=None, cluster_id=0, 
     """
     labels = np.asarray(cluster_labels)
 
-    # Gets indices assigned to the selected cluster
+    # Gets positions assigned to the selected cluster
     cluster_indices = np.where(labels == cluster_id)[0]
+
+    if len(cluster_indices) == 0:
+        print(f"El cluster {cluster_id} no tiene muestras")
+        return
+
+    rng = np.random.default_rng(random_state)
+    sample_size = min(n_images, len(cluster_indices))
+
+    # Samples images from the selected cluster without replacement
+    selected_indices = rng.choice(cluster_indices, size=sample_size, replace=False)
 
     if title is None:
         title = f"Muestras del cluster {cluster_id}"
 
-    # Reuses the general image plotting function
-    plot_images(X_images, y_true, n_images=n_images, indices=cluster_indices[:n_images], random_state=random_state, title=title)
+    plot_images(X_images, y_true, n_images=sample_size, indices=selected_indices, n_cols=min(5, sample_size), title=title)

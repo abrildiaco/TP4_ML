@@ -223,10 +223,14 @@ def build_cluster_size_table(labels):
     cluster_size_table = pd.DataFrame({
         "cluster": cluster_counts.index,
         "count": cluster_counts.values,
-        "percentage": (cluster_counts.values / len(labels) * 100).round(2)
+        "percentage": cluster_counts.values / len(labels) * 100
     })
 
-    display(cluster_size_table.style.hide(axis="index"))
+    display(
+        cluster_size_table.style
+        .hide(axis="index")
+        .format({"percentage": "{:.2f}%"})
+    )
 
     return cluster_size_table
 
@@ -246,15 +250,15 @@ def build_cluster_class_table(labels, y_true, class_names=CLASS_NAMES):
     labels = np.asarray(labels)
     y_values = y_true.to_numpy() if hasattr(y_true, "to_numpy") else np.asarray(y_true)
 
-    table = pd.crosstab(labels, y_values)
-    table.index.name = "cluster"
+    cluster_class_table = pd.crosstab(labels, y_values)
+    cluster_class_table.index.name = "cluster"
 
-    # Renames class columns with readable names
-    table.columns = [f"{label}: {class_names.get(label, label)}" for label in table.columns]
+    # Uses readable class names in the columns
+    cluster_class_table.columns = [f"{label}: {class_names.get(label, label)}" for label in cluster_class_table.columns]
 
-    display(table)
+    display(cluster_class_table.style.format("{:.0f}"))
 
-    return table
+    return cluster_class_table
 
 
 def build_cluster_purity_table(labels, y_true, class_names=CLASS_NAMES):
@@ -292,11 +296,15 @@ def build_cluster_purity_table(labels, y_true, class_names=CLASS_NAMES):
             "size": cluster_size,
             "dominant_class": f"{dominant_class}: {class_names.get(dominant_class, dominant_class)}",
             "dominant_count": dominant_count,
-            "purity": round(dominant_count / cluster_size, 4)
+            "purity": dominant_count / cluster_size
         })
 
     purity_table = pd.DataFrame(rows)
 
-    display(purity_table.style.hide(axis="index"))
+    display(
+        purity_table.style
+        .hide(axis="index")
+        .format({"purity": "{:.3f}"})
+    )
 
     return purity_table
