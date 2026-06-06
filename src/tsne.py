@@ -54,7 +54,8 @@ def _compute_joint_probabilities(X, perplexity = 30, tol = 1e-5, max_iters = 50)
     Returns:
         np.ndarray: joint probability matrix P
     """
-    distances = _compute_pairwise_distances(X)
+    # t-SNE uses squared Euclidean distances in the high-dimensional space
+    distances = _compute_pairwise_distances(X) ** 2
     n_samples = distances.shape[0]
 
     target_entropy = np.log2(perplexity)
@@ -81,14 +82,11 @@ def _compute_joint_probabilities(X, perplexity = 30, tol = 1e-5, max_iters = 50)
 
         conditional_probabilities[i] = probabilities
 
-    # Symmetrizes probabilities
     P = (conditional_probabilities + conditional_probabilities.T) / (2 * n_samples)
-
-    # Avoids zeros
     P = np.maximum(P, 1e-12)
 
     return P
-
+    
 
 def _compute_low_dimensional_probabilities(Y):
     """
@@ -103,12 +101,10 @@ def _compute_low_dimensional_probabilities(Y):
     Returns:
         tuple[np.ndarray, np.ndarray]: Q matrix and Student-t numerator
     """
-    squared_distances = _compute_pairwise_distances(Y)
+    # t-SNE uses squared distances in the low-dimensional Student-t kernel
+    squared_distances = _compute_pairwise_distances(Y) ** 2
 
-    # Computes Student-t numerator
     numerator = 1 / (1 + squared_distances)
-
-    # Removes self-similarity
     np.fill_diagonal(numerator, 0)
 
     Q = numerator / np.sum(numerator)
@@ -145,7 +141,7 @@ def _compute_tsne_gradient(P, Q, numerator, Y):
     return gradient
 
 
-def tsne(X, n_components = 2, perplexity =  30, learning_rate = 200, n_iters = 1000, random_state = 42, verbose = True):
+def tsne(X, n_components = 2, perplexity = 30, learning_rate = 100, n_iters = 1000, early_exaggeration = 12, random_state = 42, verbose = True):
     """
     Runs a custom implementation of t-SNE.
 
@@ -158,6 +154,7 @@ def tsne(X, n_components = 2, perplexity =  30, learning_rate = 200, n_iters = 1
         perplexity (float): target perplexity
         learning_rate (float): gradient descent learning rate
         n_iters (int): number of optimization iterations
+        early_exaggeration (float): factor used to separate neighbors at the beginning
         random_state (int): random seed for reproducibility
         verbose (bool): whether to print progress
 
@@ -169,25 +166,23 @@ def tsne(X, n_components = 2, perplexity =  30, learning_rate = 200, n_iters = 1
     X_values = X.to_numpy() if hasattr(X, "to_numpy") else np.asarray(X)
     n_samples = X_values.shape[0]
 
-    # Computes high-dimensional probabilities
     P = _compute_joint_probabilities(X_values, perplexity=perplexity)
+    P = P * early_exaggeration
 
-    # Early exaggeration improves cluster separation at the beginning
-    P = P * 4
-
-    # Initializes low-dimensional points close to zero
     Y = rng.normal(0, 1e-4, size=(n_samples, n_components))
 
     for iteration in range(n_iters):
         Q, numerator = _compute_low_dimensional_probabilities(Y)
         gradient = _compute_tsne_gradient(P, Q, numerator, Y)
 
-        # Updates low-dimensional coordinates
-        Y = Y + learning_rate * gradient
+        # Moves in the opposite direction of the gradient to minimize KL divergence
+        Y = Y - learning_rate * gradient
 
-        # Stops early exaggeration after 250 iterations
+        # Keeps the embedding centered around zero
+        Y = Y - Y.mean(axis=0)
+
         if iteration == 250:
-            P = P / 4
+            P = P / early_exaggeration
 
         if verbose and (iteration + 1) % 100 == 0:
             kl_divergence = np.sum(P * np.log(P / Q))

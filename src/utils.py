@@ -83,13 +83,14 @@ def run_k_means_for_k_range(X, k_values, max_iters = 200, tol = 1e-4, init = "km
     return results_by_k
 
 
-def display_k_means_comparison(pca_results, ae_results):
+def display_k_means_comparison(pca_results, ae_results, title = "Resultados de k-Means"):
     """
     Builds and displays a comparison table for k-means results obtained with PCA and AE representations.
 
     Arguments:
         pca_results (dict): k-means results over PCA latent data indexed by k
         ae_results (dict): k-means results over AE latent data indexed by k
+        title (str): title displayed above the table
 
     Returns:
         pd.DataFrame: comparison table with inertia and iterations for PCA and AE
@@ -111,7 +112,19 @@ def display_k_means_comparison(pca_results, ae_results):
     # Sorts the table by k to make the comparison easier to read
     comparison = comparison.sort_values("K").reset_index(drop=True)
 
-    display(comparison.style.hide(axis="index"))
+    print(title)
+
+    display(
+        comparison.style
+        .hide(axis="index")
+        .format({
+            "K": "{:.0f}",
+            "PCA inertia": "{:.3f}",
+            "PCA iterations": "{:.0f}",
+            "AE inertia": "{:.3f}",
+            "AE iterations": "{:.0f}"
+        })
+    )
 
 
 def run_gmm_for_k_range(X, k_values, max_iters = 200, tol=1e-10, random_state = 42, epsilon = 1e-12):
@@ -143,13 +156,14 @@ def run_gmm_for_k_range(X, k_values, max_iters = 200, tol=1e-10, random_state = 
     return results_by_k
 
 
-def display_gmm_comparison(pca_results, ae_results):
+def display_gmm_comparison(pca_results, ae_results, title = "Resultados de GMM"):
     """
     Builds and displays a comparison table for GMM results obtained with PCA and AE representations.
 
     Arguments:
         pca_results (dict): GMM results over PCA latent data indexed by k
         ae_results (dict): GMM results over AE latent data indexed by k
+        title (str): title displayed above the table
 
     Returns:
         pd.DataFrame: comparison table with log-likelihood and iterations for PCA and AE
@@ -171,7 +185,19 @@ def display_gmm_comparison(pca_results, ae_results):
     # Sorts the table by k to make the comparison easier to read
     comparison = comparison.sort_values("K").reset_index(drop=True)
 
-    display(comparison.style.hide(axis="index"))
+    print(title)
+
+    display(
+        comparison.style
+        .hide(axis="index")
+        .format({
+            "K": "{:.0f}",
+            "PCA log-likelihood": "{:.3f}",
+            "PCA iterations": "{:.0f}",
+            "AE log-likelihood": "{:.3f}",
+            "AE iterations": "{:.0f}"
+        })
+    )
 
 
 def compute_silhouette_for_k_range(X, results):
@@ -206,12 +232,13 @@ def compute_silhouette_for_k_range(X, results):
     return silhouette_table
 
 
-def build_cluster_size_table(labels):
+def build_cluster_size_table(labels, title="Tamaño de clusters"):
     """
     Builds a table with the number and percentage of samples in each cluster.
 
     Arguments:
         labels (np.ndarray): cluster labels
+        title (str): title displayed above the table
 
     Returns:
         pd.DataFrame: cluster size table
@@ -226,16 +253,22 @@ def build_cluster_size_table(labels):
         "percentage": cluster_counts.values / len(labels) * 100
     })
 
+    print(title)
+
     display(
         cluster_size_table.style
         .hide(axis="index")
-        .format({"percentage": "{:.2f}%"})
+        .format({
+            "cluster": "{:.0f}",
+            "count": "{:.0f}",
+            "percentage": "{:.3f}%"
+        })
     )
 
     return cluster_size_table
 
 
-def build_cluster_class_table(labels, y_true, class_names=CLASS_NAMES):
+def build_cluster_class_table(labels, y_true, class_names=CLASS_NAMES, title="Composición de clases por cluster"):
     """
     Builds a contingency table between clusters and true classes.
 
@@ -243,6 +276,7 @@ def build_cluster_class_table(labels, y_true, class_names=CLASS_NAMES):
         labels (np.ndarray): cluster labels
         y_true (pd.Series | np.ndarray): true labels
         class_names (dict): mapping from numeric labels to class names
+        title (str): title displayed above the table
 
     Returns:
         pd.DataFrame: cluster-class count table
@@ -256,12 +290,17 @@ def build_cluster_class_table(labels, y_true, class_names=CLASS_NAMES):
     # Uses readable class names in the columns
     cluster_class_table.columns = [f"{label}: {class_names.get(label, label)}" for label in cluster_class_table.columns]
 
-    display(cluster_class_table.style.format("{:.0f}"))
+    print(title)
+
+    display(
+        cluster_class_table.style
+        .format("{:.0f}")
+    )
 
     return cluster_class_table
 
 
-def build_cluster_purity_table(labels, y_true, class_names=CLASS_NAMES):
+def build_cluster_purity_table(labels, y_true, class_names=CLASS_NAMES, title="Pureza de clusters"):
     """
     Builds a cluster purity table.
     Purity measures the proportion of the dominant true class inside each cluster.
@@ -273,6 +312,7 @@ def build_cluster_purity_table(labels, y_true, class_names=CLASS_NAMES):
         labels (np.ndarray): cluster labels
         y_true (pd.Series | np.ndarray): true labels
         class_names (dict): mapping from numeric labels to class names
+        title (str): title displayed above the table
 
     Returns:
         pd.DataFrame: cluster purity table
@@ -301,10 +341,17 @@ def build_cluster_purity_table(labels, y_true, class_names=CLASS_NAMES):
 
     purity_table = pd.DataFrame(rows)
 
+    print(title)
+
     display(
         purity_table.style
         .hide(axis="index")
-        .format({"purity": "{:.3f}"})
+        .format({
+            "cluster": "{:.0f}",
+            "size": "{:.0f}",
+            "dominant_count": "{:.0f}",
+            "purity": "{:.3f}"
+        })
     )
 
     return purity_table

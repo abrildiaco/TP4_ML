@@ -534,7 +534,7 @@ def plot_clustering_k_analysis(kmeans_pca_gain, kmeans_ae_gain, gmm_pca_gain, gm
     plt.show()
 
 
-def plot_tsne_cluster_comparison(Y, labels_1, labels_2, title_1="k-Means", title_2="GMM", general_title="t-SNE sobre PCA latente"):
+def plot_tsne_cluster_comparison(Y, labels_1, labels_2, title_1="k-Means", title_2="GMM", general_title="t-SNE sobre PCA latente", xlim=None):
     """
     Plots the same 2D t-SNE embedding colored by two different clustering assignments.
 
@@ -545,6 +545,7 @@ def plot_tsne_cluster_comparison(Y, labels_1, labels_2, title_1="k-Means", title
         title_1 (str): title for the first subplot
         title_2 (str): title for the second subplot
         general_title (str): general title for the figure
+        xlim (tuple | None): limits for the x-axis
 
     Returns:
         None
@@ -553,35 +554,46 @@ def plot_tsne_cluster_comparison(Y, labels_1, labels_2, title_1="k-Means", title
     labels_2 = np.asarray(labels_2)
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
-
     fig.suptitle(general_title, fontsize=15, fontweight="bold")
 
-    scatter_1 = axes[0].scatter(Y[:, 0], Y[:, 1], c=labels_1, cmap="tab10", s=12, alpha=0.75)
-    axes[0].set_title(title_1, fontweight="bold")
-    axes[0].set_xlabel("t-SNE 1")
-    axes[0].set_ylabel("t-SNE 2")
-    axes[0].grid(alpha=0.2)
-    cbar_1 = fig.colorbar(scatter_1, ax=axes[0])
-    cbar_1.set_label("Cluster")
+    for ax, labels, subtitle in zip(axes, [labels_1, labels_2], [title_1, title_2]):
+        unique_labels = np.sort(np.unique(labels))
+        boundaries = np.arange(unique_labels.min() - 0.5, unique_labels.max() + 1.5, 1)
 
-    scatter_2 = axes[1].scatter(Y[:, 0], Y[:, 1], c=labels_2, cmap="tab10", s=12, alpha=0.75)
-    axes[1].set_title(title_2, fontweight="bold")
-    axes[1].set_xlabel("t-SNE 1")
-    axes[1].set_ylabel("t-SNE 2")
-    axes[1].grid(alpha=0.2)
-    cbar_2 = fig.colorbar(scatter_2, ax=axes[1])
-    cbar_2.set_label("Cluster")
+        scatter = ax.scatter(Y[:, 0], Y[:, 1], c=labels, cmap="tab10", s=12, alpha=0.75, vmin=unique_labels.min() - 0.5, vmax=unique_labels.max() + 0.5)
+
+        ax.set_title(subtitle, fontweight="bold")
+        ax.set_xlabel("t-SNE 1")
+        ax.set_ylabel("t-SNE 2")
+        ax.grid(alpha=0.2)
+
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
+        cbar = fig.colorbar(scatter, ax=ax, ticks=unique_labels, boundaries=boundaries)
+        cbar.set_label("Cluster")
 
     plt.tight_layout(rect=(0, 0, 1, 0.92))
     plt.show()
-
+        
 
 def plot_cluster_size_comparison(kmeans_size_table, gmm_size_table, title="Tamaño de clusters"):
+    """
+    Plots the number of samples assigned to each cluster for k-Means and GMM in a single figure.
+
+    Arguments:
+        kmeans_size_table (pd.DataFrame): table with cluster sizes for k-Means
+        gmm_size_table (pd.DataFrame): table with cluster sizes for GMM
+        title (str): title for the figure
+    
+    Returns:
+        None
+    """
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
     fig.suptitle(title, fontsize=15, fontweight="bold")
 
     for ax, table, subtitle in zip(axes, [kmeans_size_table, gmm_size_table], ["k-Means", "GMM"]):
-        bars = ax.bar(table["cluster"], table["count"], color="#2C7FB8")
+        bars = ax.bar(table["cluster"], table["count"], color="#05216d")
 
         for bar in bars:
             height = bar.get_height()
@@ -633,7 +645,7 @@ def plot_cluster_purity_comparison(kmeans_purity_table, gmm_purity_table, title=
     fig.suptitle(title, fontsize=15, fontweight="bold")
 
     for ax, table, subtitle in zip(axes, [kmeans_purity_table, gmm_purity_table], ["k-Means", "GMM"]):
-        bars = ax.bar(table["cluster"], table["purity"], color="#2C7FB8")
+        bars = ax.bar(table["cluster"], table["purity"], color="#05216d")
 
         for bar in bars:
             height = bar.get_height()
