@@ -227,9 +227,7 @@ def _compute_responsibilities(X, k, means, variances, weights, epsilon=1e-12):
     Each responsibility r_ij represents how much observation i belongs to component j.
 
     Formula:
-        r_ij =
-        pi_j * N(x_i | mu_j, Sigma_j)
-        / sum_l pi_l * N(x_i | mu_l, Sigma_l)
+        r_ij = pi_j * N(x_i | mu_j, Sigma_j) / sum_l pi_l * N(x_i | mu_l, Sigma_l)
 
     Arguments:
         X (pd.DataFrame | np.ndarray): data matrix
